@@ -34,11 +34,16 @@ const videoOptionsSchema = z.object({
   // Enhancement specific options
   stabilization: z.string().optional(),
   audio_enhancement_type: z.string().optional(),
+  pause_threshold: z.number().optional(),
+  noise_reduction: z.string().optional(),
   brightness: z.number().optional(),
   contrast: z.number().optional(),
   // Subtitle specific options
   subtitle_language: z.string().optional(),
-  subtitle_style: z.string().optional()
+  subtitle_style: z.string().optional(),
+  // Thumbnail specific options
+  thumbnail_text: z.string().nullable().optional(),
+  thumbnail_frame_index: z.number().nullable().optional()
 });
 
 export class ApiService {
@@ -164,11 +169,16 @@ export class ApiService {
     // Enhancement specific options
     stabilization?: string;
     audio_enhancement_type?: string;
+    pause_threshold?: number;
+    noise_reduction?: string;
     brightness?: number;
     contrast?: number;
     // Subtitle specific options
     subtitle_language?: string;
     subtitle_style?: string;
+    // Thumbnail specific options
+    thumbnail_text?: string | null;
+    thumbnail_frame_index?: number | null;
   }) {
     const validated = videoOptionsSchema.parse(options);
     return this.request(`/videos/${videoId}/process`, {
@@ -327,6 +337,41 @@ export class ApiService {
       body: JSON.stringify(data)
     });
   }
+
+  // Export video with edits (trim, text overlay, audio settings)
+  static async exportVideo(videoId: string, options: {
+    trim_start?: number;
+    trim_end?: number;
+    text_overlay?: string;
+    text_position?: string;
+    text_color?: string;
+    text_size?: number;
+    music_volume?: number;
+    video_volume?: number;
+    mute_original?: boolean;
+  }) {
+    return this.request(`/videos/${videoId}/export`, {
+      method: 'POST',
+      body: JSON.stringify(options)
+    });
+  }
+
+  // Download exported video
+  static async downloadExportedVideo(videoId: string): Promise<Blob> {
+    const token = this.getToken();
+    const response = await fetch(`${API_URL}/videos/${videoId}/download-export`, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Download failed');
+    }
+
+    return response.blob();
+  }
+
   // Download processed video
   static async downloadVideo(videoId: string): Promise<Blob> {
     const token = this.getToken();
@@ -364,5 +409,20 @@ export class ApiService {
     return this.request('/auth/delete-account', {
       method: 'DELETE'
     });
+  }
+
+  // Get video thumbnail URL
+  static getVideoThumbnailUrl(videoId: string, index?: number): string {
+    const token = this.getToken();
+    const indexParam = index !== undefined ? `index=${index}` : '';
+    const tokenParam = token ? `token=${encodeURIComponent(token)}` : '';
+    const separator = indexParam && tokenParam ? '&' : '';
+    const queryString = indexParam || tokenParam ? `?${indexParam}${separator}${tokenParam}` : '';
+    return `${API_URL}/videos/${videoId}/thumbnail${queryString}`;
+  }
+
+  // Get all thumbnails for a video
+  static async getVideoThumbnails(videoId: string) {
+    return this.request(`/videos/${videoId}/thumbnails`);
   }
 }

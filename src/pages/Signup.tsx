@@ -2,12 +2,16 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Twitter, Instagram, Youtube, Scissors } from 'lucide-react';
 import { z } from 'zod';
+import API_URL from '../config/api';
 
 const signupSchema = z.object({
   firstName: z.string().min(2, 'First name must be at least 2 characters'),
   lastName: z.string().min(2, 'Last name must be at least 2 characters'),
   email: z.string().email('Invalid email address'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
+  password: z.string()
+    .min(8, 'Password must be at least 8 characters')
+    .regex(/[A-Z]/, 'Password must contain at least one capital letter')
+    .regex(/[!@#$%^&*(),.?":{}|<>]/, 'Password must contain at least one special character'),
   confirmPassword: z.string()
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
@@ -50,7 +54,7 @@ const Signup = () => {
     e.preventDefault();
     try {
       signupSchema.parse(formData);
-      const response = await fetch('http://localhost:5001/api/auth/register', {
+      const response = await fetch(`${API_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -84,7 +88,7 @@ const Signup = () => {
 
   // OAuth handlers
   const handleGoogleLogin = () => {
-    window.location.href = 'http://localhost:5001/api/auth/google/login';
+    window.location.href = `${API_URL}/api/auth/google/login`;
   };
 
   return (

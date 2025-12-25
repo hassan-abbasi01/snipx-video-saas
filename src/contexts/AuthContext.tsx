@@ -29,8 +29,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const token = ApiService.getToken();
-    if (token) {
-      // For demo purposes, set a default user when token exists
+    if (token && token !== 'demo-token-123456') {
+      // Fetch actual user data from backend
+      fetch(`${API_URL}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+        .then(res => {
+          if (!res.ok) throw new Error('Failed to fetch user');
+          return res.json();
+        })
+        .then(userData => {
+          setUser({
+            email: userData.email,
+            firstName: userData.first_name || userData.firstName,
+            lastName: userData.last_name || userData.lastName
+          });
+        })
+        .catch(() => {
+          // Token invalid, clear it
+          ApiService.clearToken();
+          setUser(null);
+        });
+    } else if (token === 'demo-token-123456') {
+      // Demo user
       setUser({ email: 'demo@snipx.com', firstName: 'Demo', lastName: 'User' });
     }
   }, []);

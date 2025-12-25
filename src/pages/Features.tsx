@@ -25,6 +25,7 @@ import { ApiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import VideoPlayer from '../components/VideoPlayer';
 import toast from 'react-hot-toast';
+import API_URL from '../config/api';
 
 // Helper function to format file size
 const formatFileSize = (bytes: number): string => {
@@ -62,6 +63,21 @@ interface VideoData {
     thumbnail?: string;
     subtitles?: string;
     summary?: string;
+    enhancement_results?: {
+      filler_words_removed?: number;
+      noise_reduction_percentage?: number;
+      duration_reduction_percentage?: number;
+      original_duration?: string;
+      enhanced_duration?: string;
+      time_saved?: string;
+    };
+    audio_enhancement_metrics?: {
+      original_duration_ms?: number;
+      enhanced_duration_ms?: number;
+      time_saved_ms?: number;
+      time_saved_percentage?: number;
+      filler_words_removed?: number;
+    };
   };
 }
 
@@ -99,6 +115,7 @@ const Features = () => {
   const [contrastLevel, setContrastLevel] = useState<number>(100);
   const [thumbnailStyle, setThumbnailStyle] = useState<string>('modern');
   const [thumbnailText, setThumbnailText] = useState<string>('');
+  const [aiColorEnhancement, setAiColorEnhancement] = useState<boolean>(false);
 
   // State for progress bars
   const [audioProgress, setAudioProgress] = useState<ProgressState>({ visible: false, percentage: 0, status: '' });
@@ -112,6 +129,7 @@ const Features = () => {
   const [generatedSubtitles, setGeneratedSubtitles] = useState<string>('');
   const [subtitleFile, setSubtitleFile] = useState<string | null>(null);
   const [subtitleData, setSubtitleData] = useState<any[]>([]);
+  const [showConsole, setShowConsole] = useState<boolean>(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const processingIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -183,13 +201,20 @@ const Features = () => {
     const brightness = brightnessLevel / 100;
     const contrast = contrastLevel / 100;
     
-    const filterString = `brightness(${brightness}) contrast(${contrast})`;
+    // Apply AI-suggested saturation boost for live preview
+    let saturation = 1.0;
+    if (aiColorEnhancement) {
+      // Simulate AI boost - in real scenario this would be calculated from video analysis
+      saturation = 1.3; // Default AI boost for demonstration
+    }
+    
+    const filterString = `brightness(${brightness}) contrast(${contrast}) saturate(${saturation})`;
     setPreviewFilters(filterString);
     
     if (videoRef.current) {
       videoRef.current.style.filter = filterString;
     }
-  }, [brightnessLevel, contrastLevel]);
+  }, [brightnessLevel, contrastLevel, aiColorEnhancement]);
 
   // Demo video upload function (simulates upload without backend)
   const uploadVideoDemo = async (file: File) => {
@@ -359,6 +384,8 @@ const Features = () => {
     // Enhancement specific options
     stabilization?: string;
     audio_enhancement_type?: string;
+    pause_threshold?: number;
+    noise_reduction?: string;
     brightness?: number;
     contrast?: number;
     // Subtitle specific options
@@ -382,7 +409,7 @@ const Features = () => {
       
       // Simulate progress updates
       let progress = 0;
-      const progressInterval = setInterval(() => {
+      const progressInterval = setInterval(async () => {
         progress += Math.random() * 10;
         if (progress >= 100) {
           clearInterval(progressInterval);
@@ -390,9 +417,15 @@ const Features = () => {
           progressSetter(prev => ({ ...prev, percentage: 100, status: successMessage }));
           logToConsole(successMessage, 'success');
           
-          // Refresh video data
+          // Immediately fetch updated video data to get enhancement results
           if (uploadedVideoId) {
-            startStatusCheck(uploadedVideoId);
+            try {
+              const updatedData = await ApiService.getVideoStatus(uploadedVideoId);
+              setVideoData(updatedData);
+              logToConsole('Video data refreshed with enhancement results', 'info');
+            } catch (err) {
+              console.error('Failed to fetch updated video data:', err);
+            }
           }
         } else {
           progressSetter(prev => ({ ...prev, percentage: progress, status: `${Math.round(progress)}% - Processing...` }));
@@ -443,6 +476,7 @@ const Features = () => {
       setBrightnessLevel(100);
       setContrastLevel(100);
       setPreviewFilters('');
+      setAiColorEnhancement(false);
       
       // Upload the video (will use demo mode if not authenticated)
       if (isAuthenticated) {
@@ -452,6 +486,17 @@ const Features = () => {
       }
     }
   };
+
+  // Effect to auto-generate thumbnail frames when video is loaded
+  useEffect(() => {
+    if (videoSrc && selectedFile && thumbnailFrames.length === 0) {
+      // Small delay to ensure video element can load
+      const timer = setTimeout(() => {
+        simulateThumbnailFrameGeneration();
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [videoSrc, selectedFile]);
 
   // Effect for cleaning up Object URL
   useEffect(() => {
@@ -477,15 +522,72 @@ const Features = () => {
   };
 
   const simulateThumbnailFrameGeneration = () => {
-    if (!selectedFile) return;
+    if (!selectedFile || !videoSrc) return;
     setIsLoadingThumbnails(true);
-    logToConsole('Generating thumbnail frames...');
-    setTimeout(() => {
-      const frames = Array.from({ length: 6 }, (_, i) => `https://via.placeholder.com/96x64.png?text=Frame+${i + 1}`);
-      setThumbnailFrames(frames);
+    logToConsole('Generating thumbnail frames from video...');
+    
+    // Create a video element to extract frames
+    const video = document.createElement('video');
+    video.src = videoSrc;
+    video.crossOrigin = 'anonymous';
+    
+    video.addEventListener('loadedmetadata', () => {
+      const duration = video.duration;
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      if (!ctx) {
+        logToConsole('Failed to create canvas context', 'error');
+        setIsLoadingThumbnails(false);
+        return;
+      }
+      
+      canvas.width = 192; // 2x size for better quality
+      canvas.height = 128;
+      
+      const frames: string[] = [];
+      const positions = [0.1, 0.25, 0.4, 0.55, 0.7, 0.85]; // Different positions in video
+      let currentIndex = 0;
+      
+      const captureFrame = () => {
+        if (currentIndex >= positions.length) {
+          setThumbnailFrames(frames);
+          setIsLoadingThumbnails(false);
+          logToConsole(`Generated ${frames.length} thumbnail frames successfully!`, 'success');
+          return;
+        }
+        
+        const timestamp = duration * positions[currentIndex];
+        video.currentTime = timestamp;
+      };
+      
+      video.addEventListener('seeked', () => {
+        try {
+          // Draw the current video frame to canvas
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          
+          // Convert canvas to data URL
+          const frameDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+          frames.push(frameDataUrl);
+          
+          logToConsole(`Extracted frame ${currentIndex + 1}/6 at ${Math.round(video.currentTime)}s`);
+          currentIndex++;
+          captureFrame();
+        } catch (error) {
+          logToConsole(`Failed to capture frame ${currentIndex + 1}: ${error}`, 'error');
+          currentIndex++;
+          captureFrame();
+        }
+      });
+      
+      // Start capturing frames
+      captureFrame();
+    });
+    
+    video.addEventListener('error', (e) => {
+      logToConsole(`Video loading error: ${e}`, 'error');
       setIsLoadingThumbnails(false);
-      logToConsole('Thumbnail frames ready.');
-    }, 1500);
+    });
   };
 
   // Enhanced processing functions
@@ -494,12 +596,13 @@ const Features = () => {
       toast.error('Please upload a video file first');
       return;
     }
-    logToConsole(`Starting audio processing: Pause Threshold=${pauseThreshold}ms, Fillers=${fillerWordsLevel}`);
+    logToConsole(`Starting audio processing: Pause Threshold=${pauseThreshold}ms, Noise Reduction=${audioEnhancement}`);
     processVideo(
       { 
         cut_silence: true, 
         enhance_audio: true,
-        audio_enhancement_type: fillerWordsLevel
+        pause_threshold: pauseThreshold,
+        noise_reduction: audioEnhancement
       },
       setAudioProgress,
       'Audio processing completed successfully'
@@ -738,16 +841,15 @@ Automatisch generiert von SnipX AI`
       return;
     }
     
-    logToConsole(`Starting video enhancement: Stabilize=${stabilizationLevel}, Audio=${audioEnhancement}, Bright=${brightnessLevel}%, Contrast=${contrastLevel}%`);
+    logToConsole(`Starting video enhancement: AI Color=${aiColorEnhancement}, Bright=${brightnessLevel}%, Contrast=${contrastLevel}%`);
     setIsLoadingPreview(true);
     
     // Create comprehensive enhancement options
     const enhancementOptions = {
-      enhance_audio: audioEnhancement !== 'none',
-      stabilization: stabilizationLevel,
-      audio_enhancement_type: audioEnhancement,
       brightness: brightnessLevel,
-      contrast: contrastLevel
+      contrast: contrastLevel,
+      ai_color_enhancement: aiColorEnhancement,
+      saturation: 100  // Default, will be overridden by AI if enabled
     };
     
     processVideo(
@@ -757,7 +859,7 @@ Automatisch generiert von SnipX AI`
     ).finally(() => setIsLoadingPreview(false));
   };
 
-  const handleGenerateThumbnail = () => {
+  const handleGenerateThumbnail = async () => {
     if (!uploadedVideoId) {
       toast.error('Please upload a video file first');
       return;
@@ -767,49 +869,88 @@ Automatisch generiert von SnipX AI`
       return;
     }
     logToConsole(`Starting thumbnail generation: Style=${thumbnailStyle}, Text="${thumbnailText}", Frame=${selectedFrameIndex + 1}`);
+    
+    // Debug logging
+    console.log('[THUMBNAIL DEBUG] thumbnailText value:', thumbnailText);
+    console.log('[THUMBNAIL DEBUG] thumbnailText type:', typeof thumbnailText);
+    console.log('[THUMBNAIL DEBUG] thumbnailText length:', thumbnailText?.length);
+    console.log('[THUMBNAIL DEBUG] Will send:', thumbnailText || null);
+    
     setGeneratedThumbnail(null);
     
-    processVideo(
-      { generate_thumbnail: true },
-      setThumbnailProgress,
-      'Thumbnail generated successfully'
-    ).then(() => {
-      // Simulate getting the final thumbnail URL
-      const generatedUrl = `https://via.placeholder.com/1280x720.png?text=Generated+Thumb+${selectedFrameIndex + 1}`;
-      setGeneratedThumbnail(generatedUrl);
-      logToConsole('Thumbnail preview ready');
-    });
+    try {
+      await processVideo(
+        { 
+          generate_thumbnail: true,
+          thumbnail_text: thumbnailText || null,
+          thumbnail_frame_index: selectedFrameIndex
+        },
+        setThumbnailProgress,
+        'Thumbnail generated successfully'
+      );
+      
+      // Wait a bit for backend to process, then get the real thumbnail URL
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      if (isAuthenticated && uploadedVideoId) {
+        // Get the real thumbnail URL from backend
+        const thumbnailUrl = ApiService.getVideoThumbnailUrl(uploadedVideoId, selectedFrameIndex + 1);
+        setGeneratedThumbnail(thumbnailUrl);
+        logToConsole(`Thumbnail ready: ${thumbnailUrl}`, 'success');
+      } else {
+        // Demo mode - use the selected frame itself
+        setGeneratedThumbnail(thumbnailFrames[selectedFrameIndex]);
+        logToConsole('Demo mode: Using selected frame as thumbnail', 'info');
+      }
+    } catch (error) {
+      logToConsole(`Thumbnail generation error: ${error}`, 'error');
+      toast.error('Failed to generate thumbnail');
+    }
   };
 
   // FIXED: Proper download functionality
   const handleDownloadVideo = async () => {
-    if (!videoData?.outputs?.processed_video && !uploadedVideoId) {
-      toast.error('No processed video available for download');
+    if (!uploadedVideoId) {
+      toast.error('No video available for download');
       return;
     }
 
     try {
       logToConsole('Starting video download...', 'info');
       
-      // Create a download URL - in real implementation, this would be the actual processed video URL
-      const downloadUrl = videoData?.outputs?.processed_video || videoSrc;
-      
-      if (downloadUrl) {
-        // Create a temporary link element
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = `enhanced_${selectedFile?.name || 'video.mp4'}`;
-        
-        // Append to body, click, and remove
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        logToConsole('Video download started successfully!', 'success');
-        toast.success('Enhanced video download started!');
-      } else {
-        throw new Error('No download URL available');
+      // Use the proper download API endpoint
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast.error('Please login to download videos');
+        return;
       }
+
+      // Fetch the video file from the backend
+      const response = await fetch(`${API_URL}/api/videos/${uploadedVideoId}/download`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Download failed');
+      }
+
+      // Get the blob and create download link
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `enhanced_${selectedFile?.name || videoData?.filename || 'video.mp4'}`;
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      logToConsole('Video download started successfully!', 'success');
+      toast.success('Enhanced video download started!');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Download failed';
       logToConsole(`Download failed: ${errorMessage}`, 'error');
@@ -843,17 +984,49 @@ Automatisch generiert von SnipX AI`
     }
   };
 
-  const handleDownloadThumbnail = () => {
-    if (!generatedThumbnail) return;
-    logToConsole('Downloading thumbnail...');
-    // Create download link
-    const link = document.createElement('a');
-    link.href = generatedThumbnail;
-    link.download = `thumbnail-${Date.now()}.png`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success('Thumbnail download started!');
+  const handleDownloadThumbnail = async () => {
+    if (!generatedThumbnail) {
+      toast.error('No thumbnail to download');
+      return;
+    }
+    
+    try {
+      logToConsole('Downloading thumbnail...');
+      
+      // Check if it's a data URL (from canvas) or remote URL (from backend)
+      if (generatedThumbnail.startsWith('data:')) {
+        // Data URL - can download directly
+        const link = document.createElement('a');
+        link.href = generatedThumbnail;
+        link.download = `thumbnail-${Date.now()}.jpg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        logToConsole('Thumbnail downloaded successfully!', 'success');
+        toast.success('Thumbnail downloaded!');
+      } else {
+        // Remote URL - fetch and convert to blob
+        const response = await fetch(generatedThumbnail);
+        if (!response.ok) throw new Error('Failed to fetch thumbnail');
+        
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `thumbnail-${Date.now()}.jpg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        
+        logToConsole('Thumbnail downloaded successfully!', 'success');
+        toast.success('Thumbnail downloaded!');
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Download failed';
+      logToConsole(`Thumbnail download failed: ${errorMsg}`, 'error');
+      toast.error('Failed to download thumbnail');
+    }
   };
 
   const renderProgressBar = (progressState: ProgressState) => {
@@ -1205,102 +1378,23 @@ Automatisch generiert von SnipX AI`
                   Audio Enhancement
                 </h3>
                 
-                {/* Feature Description */}
-                <div className="mb-8 bg-gradient-to-r from-purple-50 to-indigo-50 border-2 border-purple-200 rounded-2xl p-6 shadow-lg">
-                  <h4 className="text-lg font-bold text-purple-900 mb-3 flex items-center">
-                    <Volume2 className="mr-2" size={20} />
-                    AI-Powered Audio Cleanup
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-purple-800">
-                    <div className="flex items-center">
-                      <CheckCircle className="mr-2 text-green-600" size={16} />
-                      <span>Detects & removes filler words ("um", "uh", "like")</span>
-                    </div>
-                    <div className="flex items-center">
-                      <CheckCircle className="mr-2 text-green-600" size={16} />
-                      <span>Smooths audio transitions for natural flow</span>
-                    </div>
-                    <div className="flex items-center">
-                      <CheckCircle className="mr-2 text-green-600" size={16} />
-                      <span>Background noise reduction & filtering</span>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="space-y-4">
-                    <label htmlFor="pause-threshold" className="block text-sm font-bold text-gray-700">
-                      Silence Detection Threshold
-                      <span className="text-xs text-gray-500 block font-normal">Remove silent pauses longer than</span>
-                    </label>
-                    <div className="flex items-center bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-200">
-                      <input 
-                        type="range" 
-                        id="pause-threshold" 
-                        min="100" 
-                        max="3000" 
-                        value={pauseThreshold} 
-                        onChange={(e) => setPauseThreshold(Number(e.target.value))} 
-                        className="w-full h-3 bg-purple-200 rounded-lg appearance-none cursor-pointer accent-purple-600" 
-                      />
-                      <span id="pause-value" className="ml-4 text-lg font-bold text-purple-600 w-20 text-right">{pauseThreshold}ms</span>
-                    </div>
-                    <p className="text-xs text-gray-600">Lower values remove more pauses, higher values preserve natural speech rhythm</p>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    <label htmlFor="filler-words-level" className="block text-sm font-bold text-gray-700">
-                      Filler Words Detection Level
-                      <span className="text-xs text-gray-500 block font-normal">AI sensitivity for detecting filler words</span>
-                    </label>
-                    <select 
-                      id="filler-words-level" 
-                      value={fillerWordsLevel} 
-                      onChange={(e) => setFillerWordsLevel(e.target.value)} 
-                      className="block w-full px-4 py-3 border-2 border-purple-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white/80 backdrop-blur-sm text-sm font-medium"
-                    >
-                      <option value="conservative">Conservative (Only obvious filler words)</option>
-                      <option value="medium">Medium (Common filler words like "um", "uh")</option>
-                      <option value="aggressive">Aggressive (All filler words including "like", "you know")</option>
-                    </select>
-                    <p className="text-xs text-gray-600">Conservative preserves natural speech, aggressive creates cleaner audio</p>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    <label htmlFor="noise-reduction" className="block text-sm font-bold text-gray-700">
-                      Background Noise Reduction
-                      <span className="text-xs text-gray-500 block font-normal">AI-powered noise filtering</span>
-                    </label>
-                    <select 
-                      id="noise-reduction" 
-                      value={audioEnhancement} 
-                      onChange={(e) => setAudioEnhancement(e.target.value)} 
-                      className="block w-full px-4 py-3 border-2 border-purple-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white/80 backdrop-blur-sm text-sm font-medium"
-                    >
-                      <option value="none">None (Keep original audio)</option>
-                      <option value="light">Light (Subtle noise reduction)</option>
-                      <option value="moderate">Moderate (Balanced clarity)</option>
-                      <option value="strong">Strong (Maximum noise removal)</option>
-                    </select>
-                    <p className="text-xs text-gray-600">Higher levels remove more background noise but may affect audio quality</p>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    <label htmlFor="transition-smoothing" className="block text-sm font-bold text-gray-700">
-                      Audio Transition Smoothing
-                      <span className="text-xs text-gray-500 block font-normal">Blend cuts for natural flow</span>
-                    </label>
-                    <select 
-                      id="transition-smoothing" 
-                      className="block w-full px-4 py-3 border-2 border-purple-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white/80 backdrop-blur-sm text-sm font-medium"
-                    >
-                      <option value="disabled">Disabled (Hard cuts)</option>
-                      <option value="subtle" selected>Subtle (Natural blending)</option>
-                      <option value="smooth">Smooth (Noticeable transitions)</option>
-                      <option value="seamless">Seamless (Maximum smoothing)</option>
-                    </select>
-                    <p className="text-xs text-gray-600">Smoothing prevents jarring audio cuts when removing segments</p>
-                  </div>
+                <div className="space-y-4">
+                  <label htmlFor="noise-reduction" className="block text-sm font-bold text-gray-700">
+                    Background Noise Reduction
+                    <span className="text-xs text-gray-500 block font-normal">AI-powered noise filtering</span>
+                  </label>
+                  <select 
+                    id="noise-reduction" 
+                    value={audioEnhancement} 
+                    onChange={(e) => setAudioEnhancement(e.target.value)} 
+                    className="block w-full px-4 py-3 border-2 border-purple-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white/80 backdrop-blur-sm text-sm font-medium"
+                  >
+                    <option value="none">None (Keep original audio)</option>
+                    <option value="light">Light (Subtle noise reduction)</option>
+                    <option value="moderate">Moderate (Balanced clarity)</option>
+                    <option value="strong">Strong (Maximum noise removal)</option>
+                  </select>
+                  <p className="text-xs text-gray-600">Higher levels remove more background noise but may affect audio quality</p>
                 </div>
                 
                 {/* Audio Timeline Preview */}
@@ -1381,15 +1475,31 @@ Automatisch generiert von SnipX AI`
                     
                     <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                       <div className="bg-white/60 rounded-xl p-3 text-center">
-                        <div className="text-lg font-bold text-green-600">~15%</div>
+                        <div className="text-lg font-bold text-green-600">
+                          {videoData?.outputs?.enhancement_results?.duration_reduction_percentage 
+                            ? `${videoData.outputs.enhancement_results.duration_reduction_percentage.toFixed(1)}%`
+                            : videoData?.outputs?.audio_enhancement_metrics?.time_saved_percentage
+                              ? `${videoData.outputs.audio_enhancement_metrics.time_saved_percentage.toFixed(1)}%`
+                              : '0%'}
+                        </div>
                         <div className="text-xs text-gray-600">Shorter Duration</div>
                       </div>
                       <div className="bg-white/60 rounded-xl p-3 text-center">
-                        <div className="text-lg font-bold text-blue-600">85%</div>
+                        <div className="text-lg font-bold text-blue-600">
+                          {videoData?.outputs?.enhancement_results?.noise_reduction_percentage 
+                            ? `${videoData.outputs.enhancement_results.noise_reduction_percentage}%`
+                            : audioEnhancement === 'strong' ? '95%' 
+                              : audioEnhancement === 'moderate' ? '75%' 
+                                : audioEnhancement === 'light' ? '50%' : '0%'}
+                        </div>
                         <div className="text-xs text-gray-600">Noise Reduced</div>
                       </div>
                       <div className="bg-white/60 rounded-xl p-3 text-center">
-                        <div className="text-lg font-bold text-purple-600">12</div>
+                        <div className="text-lg font-bold text-purple-600">
+                          {videoData?.outputs?.enhancement_results?.filler_words_removed 
+                            ?? videoData?.outputs?.audio_enhancement_metrics?.filler_words_removed 
+                            ?? 0}
+                        </div>
                         <div className="text-xs text-gray-600">Filler Words Removed</div>
                       </div>
                     </div>
@@ -1406,39 +1516,21 @@ Automatisch generiert von SnipX AI`
                   Subtitling Settings
                 </h3>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="space-y-4">
-                    <label htmlFor="subtitle-language" className="block text-sm font-bold text-gray-700">Language</label>
-                    <select 
-                      id="subtitle-language" 
-                      value={subtitleLanguage} 
-                      onChange={(e) => setSubtitleLanguage(e.target.value)} 
-                      className="block w-full px-4 py-3 border-2 border-teal-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white/80 backdrop-blur-sm text-sm font-medium"
-                    >
-                      <option value="en">🇺🇸 English</option>
-                      <option value="ur">🇵🇰 Urdu (اردو)</option>
-                      <option value="ru-ur">🇵🇰 Roman Urdu</option>
-                      <option value="es">🇪🇸 Spanish (Español)</option>
-                      <option value="fr">🇫🇷 French (Français)</option>
-                      <option value="de">🇩🇪 German (Deutsch)</option>
-                    </select>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    <label htmlFor="subtitle-style" className="block text-sm font-bold text-gray-700">Style</label>
-                    <select 
-                      id="subtitle-style" 
-                      value={subtitleStyle} 
-                      onChange={(e) => setSubtitleStyle(e.target.value)} 
-                      className="block w-full px-4 py-3 border-2 border-teal-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white/80 backdrop-blur-sm text-sm font-medium"
-                    >
-                      <option value="clean">Clean</option>
-                      <option value="modern">Modern</option>
-                      <option value="classic">Classic</option>
-                      <option value="bold">Bold</option>
-                      <option value="elegant">Elegant</option>
-                    </select>
-                  </div>
+                <div className="space-y-4">
+                  <label htmlFor="subtitle-language" className="block text-sm font-bold text-gray-700">Language</label>
+                  <select 
+                    id="subtitle-language" 
+                    value={subtitleLanguage} 
+                    onChange={(e) => setSubtitleLanguage(e.target.value)} 
+                    className="block w-full px-4 py-3 border-2 border-teal-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white/80 backdrop-blur-sm text-sm font-medium"
+                  >
+                    <option value="en">🇺🇸 English</option>
+                    <option value="ur">🇵🇰 Urdu (اردو)</option>
+                    <option value="ru-ur">🇵🇰 Roman Urdu</option>
+                    <option value="es">🇪🇸 Spanish (Español)</option>
+                    <option value="fr">🇫🇷 French (Français)</option>
+                    <option value="de">🇩🇪 German (Deutsch)</option>
+                  </select>
                 </div>
 
                 {/* Enhanced Subtitle Preview */}
@@ -1571,35 +1663,36 @@ Automatisch generiert von SnipX AI`
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="space-y-4">
-                    <label htmlFor="stabilization-level" className="block text-sm font-bold text-gray-700">Stabilization</label>
-                    <select 
-                      id="stabilization-level" 
-                      value={stabilizationLevel} 
-                      onChange={(e) => setStabilizationLevel(e.target.value)} 
-                      className="block w-full px-4 py-3 border-2 border-green-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white/80 backdrop-blur-sm text-sm font-medium"
-                    >
-                      <option value="none">None</option>
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High</option>
-                    </select>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    <label htmlFor="audio-enhancement" className="block text-sm font-bold text-gray-700">Audio Enhancement</label>
-                    <select 
-                      id="audio-enhancement" 
-                      value={audioEnhancement} 
-                      onChange={(e) => setAudioEnhancement(e.target.value)} 
-                      className="block w-full px-4 py-3 border-2 border-green-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white/80 backdrop-blur-sm text-sm font-medium"
-                    >
-                      <option value="none">None</option>
-                      <option value="clear">Clear Speech</option>
-                      <option value="music">Music Enhancement</option>
-                      <option value="full">Full Enhancement</option>
-                    </select>
+                <div className="grid grid-cols-1 gap-8">
+                  {/* AI Color Enhancement Toggle */}
+                  <div className="space-y-4 bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200 rounded-2xl p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <label htmlFor="ai-color-enhancement" className="block text-sm font-bold text-gray-800 flex items-center">
+                          <Wand2 className="mr-2 text-purple-600" size={20} />
+                          AI Color Enhancement
+                          <span className="ml-2 bg-purple-600 text-white text-xs px-2 py-1 rounded-full">NEW</span>
+                        </label>
+                        <p className="text-xs text-gray-600 mt-1">Automatically adjusts saturation, brightness & contrast to optimal levels</p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input 
+                          type="checkbox" 
+                          id="ai-color-enhancement"
+                          checked={aiColorEnhancement}
+                          onChange={(e) => setAiColorEnhancement(e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-14 h-7 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-purple-600"></div>
+                      </label>
+                    </div>
+                    {aiColorEnhancement && (
+                      <div className="mt-3 bg-white/60 rounded-xl p-3 border border-purple-200">
+                        <p className="text-xs text-purple-800 font-medium">
+                          ✨ AI will analyze your video and automatically apply the best color settings. Manual adjustments below will override AI values.
+                        </p>
+                      </div>
+                    )}
                   </div>
                   
                   <div className="space-y-4">
@@ -1676,23 +1769,7 @@ Automatisch generiert von SnipX AI`
                   Thumbnail Generation
                 </h3>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="space-y-4">
-                    <label htmlFor="thumbnail-style" className="block text-sm font-bold text-gray-700">Style</label>
-                    <select 
-                      id="thumbnail-style" 
-                      value={thumbnailStyle} 
-                      onChange={(e) => setThumbnailStyle(e.target.value)} 
-                      className="block w-full px-4 py-3 border-2 border-red-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white/80 backdrop-blur-sm text-sm font-medium"
-                    >
-                      <option value="minimal">Minimal</option>
-                      <option value="modern">Modern</option>
-                      <option value="bold">Bold</option>
-                      <option value="elegant">Elegant</option>
-                      <option value="vibrant">Vibrant</option>
-                    </select>
-                  </div>
-                  
+                <div className="space-y-6">
                   <div className="space-y-4">
                     <label htmlFor="thumbnail-text" className="block text-sm font-bold text-gray-700">Add Text Overlay</label>
                     <input 
@@ -1705,7 +1782,7 @@ Automatisch generiert von SnipX AI`
                     />
                   </div>
                   
-                  <div className="md:col-span-2 space-y-4">
+                  <div className="space-y-4">
                     <label className="block text-sm font-bold text-gray-700">Select Frame</label>
                     <div className="flex space-x-4 overflow-x-auto py-4 bg-gradient-to-r from-red-50 to-pink-50 p-4 rounded-2xl border-2 border-red-200 shadow-inner">
                       {isLoadingThumbnails ? (
@@ -1800,6 +1877,12 @@ Automatisch generiert von SnipX AI`
                       // Optional: handle time updates if needed
                     }}
                   />
+                  {aiColorEnhancement && (
+                    <div className="absolute top-4 left-4 bg-purple-600/90 backdrop-blur-sm text-white px-4 py-2 rounded-full flex items-center space-x-2 shadow-lg animate-pulse">
+                      <Sparkles size={16} />
+                      <span className="text-sm font-bold">AI Enhanced Preview</span>
+                    </div>
+                  )}
                 </div>
               )}
               {isLoadingPreview && (
@@ -1837,55 +1920,42 @@ Automatisch generiert von SnipX AI`
                     </div>
                   </div>
                 )}
-                
-                {/* Enhancement Controls */}
-                <div className="bg-gradient-to-r from-gray-50 to-purple-50 border-2 border-gray-200 rounded-2xl p-6 shadow-lg animate-slide-in-3d">
-                  <div className="flex items-center justify-between">
-                    <span className="text-lg font-bold text-gray-700 flex items-center">
-                      <Volume2 className="mr-2" size={20} />
-                      Live Enhancement Preview
-                    </span>
-                    <div className="flex items-center space-x-6 text-sm font-medium text-gray-600">
-                      <span className="bg-white rounded-full px-3 py-1">Brightness: {brightnessLevel}%</span>
-                      <span className="bg-white rounded-full px-3 py-1">Contrast: {contrastLevel}%</span>
-                      <button 
-                        onClick={() => {
-                          setBrightnessLevel(100);
-                          setContrastLevel(100);
-                        }}
-                        className="text-purple-600 hover:text-purple-800 font-bold bg-purple-100 hover:bg-purple-200 rounded-full px-4 py-2 transition-all duration-300 transform hover:scale-105"
-                      >
-                        Reset
-                      </button>
-                    </div>
-                  </div>
-                </div>
               </div>
             )}
           </div>
 
-          {/* Enhanced API Console */}
+          {/* Enhanced API Console - Collapsible */}
           <div className="mt-12">
-            <h3 className="text-2xl font-bold text-gray-900 mb-4 flex items-center">
-              <Zap className="mr-3 text-green-600 animate-pulse" size={28} />
-              API Console
-            </h3>
-            <div 
-              id="api-console" 
-              ref={consoleRef} 
-              className="api-console text-sm bg-gradient-to-br from-gray-900 to-black text-green-400 font-mono p-6 rounded-2xl h-64 overflow-y-auto border-2 border-gray-700 scroll-smooth shadow-2xl backdrop-blur-md"
+            <button 
+              onClick={() => setShowConsole(!showConsole)}
+              className="w-full text-left text-xl font-bold text-gray-900 mb-4 flex items-center justify-between bg-gradient-to-r from-gray-100 to-gray-50 hover:from-gray-200 hover:to-gray-100 px-6 py-4 rounded-2xl transition-all duration-300 border border-gray-200 shadow-md hover:shadow-lg"
             >
-              {consoleLogs.map((log, index) => (
-                <div key={index} className="console-line whitespace-pre-wrap break-words mb-2 last:mb-0 animate-message-slide-3d" style={{ animationDelay: `${index * 50}ms` }}>
-                  <span className="text-gray-500 mr-3 select-none">[{log.timestamp}]</span>
-                  <span className={
-                    log.type === 'success' ? 'text-green-400 font-bold' : 
-                    log.type === 'error' ? 'text-red-400 font-bold' : 
-                    log.message.startsWith('[System]') ? 'text-blue-400 font-bold' : 'text-green-400'
-                  }>{log.message}</span>
-                </div>
-              ))}
-            </div>
+              <span className="flex items-center">
+                <Zap className="mr-3 text-green-600 animate-pulse" size={24} />
+                API Console
+              </span>
+              <span className={`transform transition-transform duration-300 ${showConsole ? 'rotate-180' : ''}`}>
+                ▼
+              </span>
+            </button>
+            {showConsole && (
+              <div 
+                id="api-console" 
+                ref={consoleRef} 
+                className="api-console text-sm bg-gradient-to-br from-gray-900 to-black text-green-400 font-mono p-6 rounded-2xl h-64 overflow-y-auto border-2 border-gray-700 scroll-smooth shadow-2xl backdrop-blur-md animate-slide-down"
+              >
+                {consoleLogs.map((log, index) => (
+                  <div key={index} className="console-line whitespace-pre-wrap break-words mb-2 last:mb-0 animate-message-slide-3d" style={{ animationDelay: `${index * 50}ms` }}>
+                    <span className="text-gray-500 mr-3 select-none">[{log.timestamp}]</span>
+                    <span className={
+                      log.type === 'success' ? 'text-green-400 font-bold' : 
+                      log.type === 'error' ? 'text-red-400 font-bold' : 
+                      log.message.startsWith('[System]') ? 'text-blue-400 font-bold' : 'text-green-400'
+                    }>{log.message}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -1,0 +1,39 @@
+# Core Flask dependencies
+flask==3.0.0
+flask-cors==4.0.0
+gunicorn==21.2.0
+werkzeug==3.0.1
+python-dotenv==1.0.0
+
+# Database
+pymongo==4.6.1
+
+# Video processing (lightweight)
+moviepy==1.0.3
+pydub==0.25.1
+python-magic-bin==0.4.14
+
+# Audio/Video processing
+openai-whisper==20231117
+librosa==0.10.1
+noisereduce==3.0.2
+SpeechRecognition==3.10.0
+
+# Image processing
+opencv-python-headless==4.9.0.80
+Pillow==10.1.0
+pytesseract==0.3.10
+
+# Math & Science
+numpy==1.26.4
+scipy==1.12.0
+numba==0.59.0
+
+# Translation
+deep-translator==1.11.4
+
+# AI Models (commented out - uncomment if needed, but increases deploy time)
+# tensorflow==2.18.0
+# transformers==4.36.2
+# torch==2.2.0
+# torchaudio==2.2.0

@@ -29,28 +29,12 @@ interface FAQ {
   category: string;
 }
 
-interface ChatMessage {
-  id: string;
-  message: string;
-  sender: 'user' | 'bot';
-  timestamp: Date;
-}
-
 const Help = () => {
   const { isAuthenticated, user } = useAuth();
   const [activeTab, setActiveTab] = useState('faq');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [expandedFAQ, setExpandedFAQ] = useState<string | null>(null);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    {
-      id: '1',
-      message: 'Hello! I\'m your SnipX assistant. How can I help you today?',
-      sender: 'bot',
-      timestamp: new Date()
-    }
-  ]);
-  const [newMessage, setNewMessage] = useState('');
   const [supportForm, setSupportForm] = useState({
     name: user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : '',
     email: user?.email || '',
@@ -160,48 +144,6 @@ const Help = () => {
     return matchesSearch && matchesCategory;
   });
 
-  const handleSendMessage = () => {
-    if (!newMessage.trim()) return;
-
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      message: newMessage,
-      sender: 'user',
-      timestamp: new Date()
-    };
-
-    setChatMessages(prev => [...prev, userMessage]);
-
-    // Simulate bot response
-    setTimeout(() => {
-      const botResponse: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        message: getBotResponse(newMessage),
-        sender: 'bot',
-        timestamp: new Date()
-      };
-      setChatMessages(prev => [...prev, botResponse]);
-    }, 1000);
-
-    setNewMessage('');
-  };
-
-  const getBotResponse = (message: string): string => {
-    const lowerMessage = message.toLowerCase();
-    
-    if (lowerMessage.includes('upload') || lowerMessage.includes('video')) {
-      return 'To upload a video, go to the Editor page and drag & drop your file or click "Select Video". We support MP4, MOV, AVI, and MKV formats up to 500MB.';
-    } else if (lowerMessage.includes('subtitle') || lowerMessage.includes('caption')) {
-      return 'Our AI can generate subtitles in multiple languages including English, Urdu, Spanish, French, and German. You can also edit them after generation.';
-    } else if (lowerMessage.includes('processing') || lowerMessage.includes('time')) {
-      return 'Processing time typically takes 1-3 minutes per minute of video content, depending on the features you select.';
-    } else if (lowerMessage.includes('price') || lowerMessage.includes('cost')) {
-      return 'SnipX offers flexible pricing plans. Please check our pricing page for detailed information about our plans and features.';
-    } else {
-      return 'I\'d be happy to help! You can ask me about video uploads, subtitle generation, processing times, or any other SnipX features. What would you like to know?';
-    }
-  };
-
   const handleSupportSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -281,7 +223,6 @@ const Help = () => {
             {[
               { id: 'faq', label: 'FAQ', icon: HelpCircle },
               { id: 'tutorials', label: 'Tutorials', icon: Book },
-              { id: 'chat', label: 'Live Chat', icon: MessageCircle },
               { id: 'support', label: 'Support Ticket', icon: Bug }
             ].map((tab, index) => (
               <button
@@ -409,85 +350,6 @@ const Help = () => {
                   <button className="border-2 border-purple-600 text-purple-600 px-6 py-3 rounded-lg hover:bg-purple-50 transition-all duration-300 transform hover:scale-105">
                     Contact Support
                   </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'chat' && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-semibold text-gray-900 animate-slide-in-3d">Live Chat Assistant</h2>
-                <div className="flex items-center text-green-600 animate-pulse-3d">
-                  <div className="w-3 h-3 bg-green-500 rounded-full mr-2 animate-ping"></div>
-                  <span className="text-sm font-medium">Online</span>
-                </div>
-              </div>
-
-              <div className="border border-gray-200 rounded-xl bg-white/80 backdrop-blur-sm shadow-lg animate-slide-up-3d">
-                <div className="h-96 overflow-y-auto p-6 space-y-4">
-                  {chatMessages.map((message, index) => (
-                    <div
-                      key={message.id}
-                      className={`flex animate-message-slide-3d ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-                      style={{ animationDelay: `${index * 100}ms` }}
-                    >
-                      <div
-                        className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl shadow-lg transform hover:scale-105 transition-all duration-300 ${
-                          message.sender === 'user'
-                            ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white'
-                            : 'bg-white border border-gray-200 text-gray-900'
-                        }`}
-                      >
-                        <p className="text-sm">{message.message}</p>
-                        <p className={`text-xs mt-1 ${
-                          message.sender === 'user' ? 'text-purple-200' : 'text-gray-500'
-                        }`}>
-                          {message.timestamp.toLocaleTimeString()}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="border-t border-gray-200 p-4 bg-gray-50/50 rounded-b-xl">
-                  <div className="flex space-x-3">
-                    <input
-                      type="text"
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                      placeholder="Type your message..."
-                      className="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white/80 backdrop-blur-sm transition-all duration-300 hover:shadow-lg"
-                    />
-                    <button
-                      onClick={handleSendMessage}
-                      className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all duration-300 transform hover:scale-105 hover:shadow-lg"
-                    >
-                      <Send size={16} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-xl p-4 animate-slide-in-3d">
-                <h3 className="text-sm font-medium text-blue-900 mb-2">Quick Actions</h3>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    'How to upload a video?',
-                    'Subtitle generation help',
-                    'Processing time info',
-                    'Pricing information'
-                  ].map((action, index) => (
-                    <button
-                      key={action}
-                      onClick={() => setNewMessage(action)}
-                      className="text-xs bg-blue-100 text-blue-800 px-3 py-2 rounded-full hover:bg-blue-200 transition-all duration-300 transform hover:scale-105 animate-bounce-in-3d"
-                      style={{ animationDelay: `${index * 100}ms` }}
-                    >
-                      {action}
-                    </button>
-                  ))}
                 </div>
               </div>
             </div>

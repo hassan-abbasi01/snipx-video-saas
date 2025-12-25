@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ApiService } from '../services/api';
 import toast from 'react-hot-toast';
+import API_URL from '../config/api';
 
 const AuthCallback = () => {
   const navigate = useNavigate();
@@ -13,17 +14,21 @@ const AuthCallback = () => {
     const token = searchParams.get('token');
     if (token) {
       ApiService.setToken(token);
-      fetch('http://localhost:5001/api/auth/me', {
+      fetch(`${API_URL}/api/auth/me`, {
         headers: { Authorization: `Bearer ${token}` }
       })
         .then(res => {
           if (!res.ok) throw new Error('Failed to fetch user');
           return res.json();
         })
-        .then(user => {
-          setUser(user);
+        .then(userData => {
+          setUser({
+            email: userData.email,
+            firstName: userData.first_name || userData.firstName,
+            lastName: userData.last_name || userData.lastName
+          });
           toast.success('Login successful!');
-          navigate('/editor');
+          navigate('/features');
         })
         .catch(() => {
           toast.error('Failed to fetch user info');

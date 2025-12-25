@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Twitter, Instagram, Youtube, Scissors, Sparkles } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
+import API_URL from '../config/api';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -55,7 +56,7 @@ const Login = () => {
 
   // OAuth handlers (copied from Signup)
   const handleGoogleLogin = () => {
-    window.location.href = 'http://localhost:5001/api/auth/google/login';
+    window.location.href = `${API_URL}/api/auth/google/login`;
   };
 
   return (
@@ -280,6 +281,22 @@ const Login = () => {
               <p className="text-xs text-indigo-500 mt-2 text-center">
                 Or use credentials: demo@snipx.com / demo1234
               </p>
+            </div>
+
+            {/* Admin Login Link */}
+            <div className="mt-4 bg-gradient-to-r from-gray-800 to-gray-900 border-2 border-gray-700 rounded-xl p-4 animate-slide-up-3d">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-medium text-gray-100 mb-1">Admin Access</h4>
+                  <p className="text-xs text-gray-400">For administrators only</p>
+                </div>
+                <Link
+                  to="/admin/login"
+                  className="bg-gradient-to-r from-gray-700 to-gray-800 text-white py-2 px-4 rounded-lg font-medium hover:from-gray-600 hover:to-gray-700 transition-all duration-300 border border-gray-600 transform hover:scale-105 hover:shadow-lg text-sm"
+                >
+                  Admin Login →
+                </Link>
+              </div>
             </div>
           </div>
 

@@ -7,9 +7,6 @@ import {
   Shield, 
   Activity,
   TrendingUp,
-  Download,
-  Eye,
-  Trash2,
   Search,
   Filter,
   RefreshCw,
@@ -53,7 +50,7 @@ const Admin = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [users, setUsers] = useState<UserData[]>([]);
-  const [videos, setVideos] = useState<VideoData[]>([]);
+  const [_videos, _setVideos] = useState<VideoData[]>([]); // Unused for now - for future video tab implementation
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [loading, setLoading] = useState(true);
@@ -120,7 +117,7 @@ const Admin = () => {
         }
       ]);
 
-      setVideos([
+      _setVideos([
         {
           id: '1',
           filename: 'presentation.mp4',
@@ -149,22 +146,22 @@ const Admin = () => {
     }
   };
 
-  const handleUserAction = (userId: string, action: 'suspend' | 'activate' | 'delete') => {
+  const handleUserAction = (_userId: string, action: 'suspend' | 'activate' | 'delete') => {
     // Handle user actions
     toast.success(`User ${action}d successfully`);
   };
 
-  const handleVideoAction = (videoId: string, action: 'view' | 'download' | 'delete') => {
-    // Handle video actions
-    toast.success(`Video ${action} action completed`);
-  };
+  // Commented out unused functions - can be enabled when video tab is implemented
+  // const handleVideoAction = (_videoId: string, action: 'view' | 'download' | 'delete') => {
+  //   toast.success(`Video ${action} action completed`);
+  // };
 
-  const formatFileSize = (bytes: number) => {
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    if (bytes === 0) return '0 Bytes';
-    const i = Math.floor(Math.log(bytes) / Math.log(1024));
-    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
-  };
+  // const formatFileSize = (bytes: number) => {
+  //   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  //   if (bytes === 0) return '0 Bytes';
+  //   const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  //   return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+  // };
 
   const filteredUsers = users.filter(user => {
     const matchesSearch = user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -173,12 +170,13 @@ const Admin = () => {
     return matchesSearch && matchesFilter;
   });
 
-  const filteredVideos = videos.filter(video => {
-    const matchesSearch = video.filename.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         video.userEmail.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = filterStatus === 'all' || video.status === filterStatus;
-    return matchesSearch && matchesFilter;
-  });
+  // Commented out - not currently used in the component
+  // const filteredVideos = videos.filter(video => {
+  //   const matchesSearch = video.filename.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  //                        video.userEmail.toLowerCase().includes(searchTerm.toLowerCase());
+  //   const matchesFilter = filterStatus === 'all' || video.status === filterStatus;
+  //   return matchesSearch && matchesFilter;
+  // });
 
   if (loading) {
     return (
@@ -294,7 +292,7 @@ const Admin = () => {
                     { icon: TrendingUp, label: 'Monthly Growth', value: `${stats?.monthlyGrowth}%`, color: 'yellow', delay: '300ms' },
                     { icon: BarChart3, label: 'Storage Used', value: `${stats?.storageUsed} TB`, color: 'red', delay: '400ms' },
                     { icon: Activity, label: 'Processing Time', value: `${stats?.totalProcessingTime.toLocaleString()} min`, color: 'indigo', delay: '500ms' }
-                  ].map((stat, index) => (
+                  ].map((stat) => (
                     <div 
                       key={stat.label}
                       className="bg-white/90 backdrop-blur-md rounded-2xl shadow-xl p-6 border border-white/20 transform hover:scale-105 hover:-translate-y-2 transition-all duration-300 hover:shadow-2xl animate-card-float-3d interactive-3d"

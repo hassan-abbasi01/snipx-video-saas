@@ -214,7 +214,9 @@ const AdminUsers: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-700">
-                        {new Date(user.created_at).toLocaleDateString()}
+                        {user.created_at && !isNaN(new Date(user.created_at).getTime()) 
+                          ? new Date(user.created_at).toLocaleDateString() 
+                          : 'N/A'}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">

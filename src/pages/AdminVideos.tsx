@@ -242,10 +242,14 @@ const AdminVideos: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-700">
-                        {new Date(video.created_at).toLocaleDateString()}
+                        {video.created_at && !isNaN(new Date(video.created_at).getTime()) 
+                          ? new Date(video.created_at).toLocaleDateString() 
+                          : 'N/A'}
                       </div>
                       <div className="text-xs text-gray-500">
-                        {new Date(video.created_at).toLocaleTimeString()}
+                        {video.created_at && !isNaN(new Date(video.created_at).getTime()) 
+                          ? new Date(video.created_at).toLocaleTimeString() 
+                          : 'N/A'}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">

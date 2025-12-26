@@ -179,10 +179,14 @@ const AdminTickets = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         <div className="flex items-center">
                           <Clock size={14} className="mr-1" />
-                          {new Date(ticket.created_at).toLocaleDateString()}
+                          {ticket.created_at && !isNaN(new Date(ticket.created_at).getTime()) 
+                            ? new Date(ticket.created_at).toLocaleDateString() 
+                            : 'N/A'}
                         </div>
-                        <div className="text-xs text-gray-400">
-                          {new Date(ticket.created_at).toLocaleTimeString()}
+                        <div className="text-xs text-gray-500">
+                          {ticket.created_at && !isNaN(new Date(ticket.created_at).getTime()) 
+                            ? new Date(ticket.created_at).toLocaleTimeString() 
+                            : 'N/A'}
                         </div>
                       </td>
                     </tr>

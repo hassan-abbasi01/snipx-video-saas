@@ -9,18 +9,27 @@ authlib==1.3.0
 bcrypt==4.1.2
 PyJWT==2.8.0
 python-magic==0.4.27
+
+# Video/Audio Processing
 moviepy==1.0.3
 opencv-python-headless==4.9.0.80
-
-# Audio Processing (Lightweight)
 pydub==0.25.1
 numpy==1.26.4
+scipy>=1.11.0
+librosa>=0.10.0
+
+# ML (will work on Python 3.13 - newer versions)
+tensorflow>=2.15.0
+transformers>=4.35.0
+torch>=2.1.0
+Pillow>=10.3.0
 
 # Translation
 deep-translator==1.11.4
 
-# Video Processing (Lightweight - moviepy without heavy deps)
+# Video Processing extras
 imageio==2.37.2
 imageio-ffmpeg==0.6.0
 decorator==4.4.2
+requests==2.32.5
 requests==2.32.5

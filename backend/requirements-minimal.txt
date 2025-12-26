@@ -14,14 +14,14 @@ python-magic==0.4.27
 moviepy==1.0.3
 opencv-python-headless==4.9.0.80
 pydub==0.25.1
-numpy==1.26.4
+numpy<2.0,>=1.26.0
 # scipy==1.13.0  # Removed temporarily - needs Python <3.13
 # librosa>=0.10.0  # Removed temporarily - depends on scipy
 
-# ML (will work on Python 3.13 - newer versions)
-tensorflow>=2.15.0
-transformers>=4.35.0
-torch>=2.1.0
+# ML (temporarily removed for Python 3.13 compatibility)
+# tensorflow>=2.15.0
+# transformers>=4.35.0
+# torch>=2.1.0
 Pillow>=10.3.0
 
 # Translation

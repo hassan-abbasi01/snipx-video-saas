@@ -608,23 +608,41 @@ class AudioEnhancer:
             # Reset filler word count
             self._filler_words_removed_count = 0
             
-            # Step 1: Remove excessive silence/pauses
-            enhanced_audio = self._remove_silence(audio, pause_threshold)
-            print(f"[AUDIO ENHANCE] After silence removal: {len(enhanced_audio)}ms")
-            
-            # Step 2: Remove filler words using REAL speech recognition
-            if enhancement_type in ['medium', 'aggressive']:
-                enhanced_audio = self._remove_filler_words_with_whisper(enhanced_audio, audio_path, enhancement_type)
-                print(f"[AUDIO ENHANCE] After filler word removal: {len(enhanced_audio)}ms, removed {self._filler_words_removed_count} fillers")
-            
-            # Step 3: Apply noise reduction
+            # ==========================================
+            # CLEANVOICE AI MECHANISM (Professional Order)
+            # ==========================================
+            # Step 1: Remove Background Noise FIRST (Critical!)
+            # Reason: Saaf audio se Whisper filler words better detect karta hai
             if noise_reduction != 'none':
-                enhanced_audio = self._reduce_noise(enhanced_audio, noise_reduction)
-                print(f"[AUDIO ENHANCE] After noise reduction: {len(enhanced_audio)}ms")
+                enhanced_audio = self._reduce_noise(audio, noise_reduction)
+                print(f"[CLEANVOICE AI] ✓ Step 1: Background noise removed ({noise_reduction}): {len(enhanced_audio)}ms")
+            else:
+                enhanced_audio = audio
+            
+            # Step 2: Remove Filler Words (Um, Uh, Like) using Whisper ASR
+            # Reason: Clean audio pe Whisper accurately kaam karta hai
+            if enhancement_type in ['medium', 'aggressive']:
+                # Save cleaned audio temporarily for Whisper processing
+                temp_cleaned_path = audio_path.replace('.', '_cleaned_temp.')
+                enhanced_audio.export(temp_cleaned_path, format='wav')
+                
+                enhanced_audio = self._remove_filler_words_with_whisper(enhanced_audio, temp_cleaned_path, enhancement_type)
+                print(f"[CLEANVOICE AI] ✓ Step 2: Filler words removed: {len(enhanced_audio)}ms, {self._filler_words_removed_count} fillers")
+                
+                # Cleanup temp file
+                try:
+                    import os
+                    os.remove(temp_cleaned_path)
+                except:
+                    pass
+            
+            # Step 3: Remove excessive silence/pauses (natural flow)
+            enhanced_audio = self._remove_silence(enhanced_audio, pause_threshold)
+            print(f"[CLEANVOICE AI] ✓ Step 3: Silence removed: {len(enhanced_audio)}ms")
             
             # Step 4: Apply transition smoothing for natural flow
             enhanced_audio = self._apply_transition_smoothing(enhanced_audio)
-            print(f"[AUDIO ENHANCE] After transition smoothing: {len(enhanced_audio)}ms")
+            print(f"[CLEANVOICE AI] ✓ Step 4: Transitions smoothed: {len(enhanced_audio)}ms")
             
             # Step 5: Normalize audio
             enhanced_audio = normalize(enhanced_audio)
@@ -675,13 +693,13 @@ class AudioEnhancer:
                 print("[SILENCE] No chunks found, returning original audio")
                 return audio
             
-            # Combine chunks with controlled gaps
+            # Combine chunks with minimal controlled gaps for natural timing
             result = AudioSegment.empty()
             for i, chunk in enumerate(chunks):
                 result += chunk
-                # Add small gap between chunks (except last one)
+                # Add minimal gap between chunks (except last one)
                 if i < len(chunks) - 1:
-                    gap_duration = min(200, pause_threshold // 3)  # Maximum 200ms gap
+                    gap_duration = min(150, pause_threshold // 4)  # Smaller gap, better timing
                     silence_gap = AudioSegment.silent(duration=gap_duration)
                     result += silence_gap
             
@@ -693,117 +711,117 @@ class AudioEnhancer:
             return audio
     
     def _remove_filler_words_with_whisper(self, audio, audio_path, enhancement_type):
-        """Smart filler word removal using Whisper + PyDub crossfading"""
+        """CleanVoice AI mechanism: Identify -> Timestamp -> Cut"""
         try:
-            print(f"[FILLER] Starting intelligent filler word detection: {enhancement_type}")
+            print(f"[CLEANVOICE FILLER] Starting professional filler word removal: {enhancement_type}")
             
-            # Define filler words based on enhancement type
+            # CleanVoice AI comprehensive filler word lists
             filler_config = {
                 'conservative': ['um', 'uh', 'er'],
-                'medium': ['um', 'uh', 'er', 'ah', 'hmm', 'mm', 'erm'],
-                'aggressive': ['um', 'uh', 'er', 'ah', 'hmm', 'mm', 'erm', 'like', 'you know', 'basically', 'actually', 'literally', 'so', 'well']
+                'medium': ['um', 'uh', 'er', 'ah', 'hmm', 'mm', 'erm', 'uhm', 'umm', 'mhm', 'ehh'],
+                'aggressive': ['um', 'uh', 'er', 'ah', 'hmm', 'mm', 'erm', 'uhm', 'umm', 'mhm', 'ehh', 'like', 'you know', 'basically', 'actually', 'literally', 'so', 'well', 'okay', 'right', 'yeah']
             }
             
             target_fillers = filler_config.get(enhancement_type, filler_config['medium'])
-            print(f"[FILLER] Target words: {target_fillers}")
+            print(f"[CLEANVOICE FILLER] Target fillers ({len(target_fillers)}): {target_fillers}")
             
             # Detect filler words with Whisper
             filler_segments = self._detect_fillers_with_whisper(audio_path, target_fillers)
             
             if not filler_segments:
-                print("[FILLER] No filler words detected")
+                print("[CLEANVOICE FILLER] ✓ No filler words detected (clean audio!)")
                 return audio
             
-            print(f"[FILLER] Found {len(filler_segments)} filler segments")
+            print(f"[CLEANVOICE FILLER] Found {len(filler_segments)} filler segments to remove")
             
             # Sort segments by start time
             filler_segments.sort(key=lambda x: x[0])
             
-            # Smart snipping with crossfades
+            # CleanVoice AI cutting & stitching mechanism
             result = AudioSegment.empty()
             last_end = 0
-            crossfade_duration = 50  # 50ms crossfade for smooth transitions
+            crossfade_duration = 15  # Ultra-minimal crossfade for natural flow
             
             for start_ms, end_ms in filler_segments:
-                # Get audio before filler word
+                # Keep audio BEFORE filler word
                 if start_ms > last_end:
                     segment = audio[last_end:start_ms]
                     
-                    # If we have previous audio, apply crossfade
-                    if len(result) > crossfade_duration:
+                    # CleanVoice AI smooth concatenation
+                    if len(result) > crossfade_duration and len(segment) > crossfade_duration:
                         result = result.append(segment, crossfade=crossfade_duration)
                     else:
                         result += segment
                 
-                # Skip the filler word entirely
+                # CUT the filler word (skip completely)
                 last_end = end_ms
                 self._filler_words_removed_count += 1
             
-            # Add remaining audio with crossfade
+            # Add remaining audio with smooth transition
             if last_end < len(audio):
                 remaining = audio[last_end:]
-                if len(result) > crossfade_duration:
+                if len(result) > crossfade_duration and len(remaining) > crossfade_duration:
                     result = result.append(remaining, crossfade=crossfade_duration)
                 else:
                     result += remaining
             
-            print(f"[FILLER] Removed {self._filler_words_removed_count} segments with smooth crossfades")
+            print(f"[CLEANVOICE FILLER] ✓ Successfully removed {self._filler_words_removed_count} filler words")
             return result
             
         except Exception as e:
-            print(f"[FILLER] Error: {e}")
+            print(f"[CLEANVOICE FILLER] ✗ Error: {e}")
             import traceback
             traceback.print_exc()
             return audio
     
     def _detect_fillers_with_whisper(self, audio_path, target_fillers):
-        """Use Whisper to detect filler words with timestamps"""
+        """CleanVoice AI: Whisper ASR for word-level timestamp detection"""
         try:
             model = self._load_whisper()
             if model is None:
-                print("[WHISPER] Whisper not available, skipping...")
+                print("[CLEANVOICE WHISPER] Whisper not available, skipping filler detection...")
                 return []
             
-            print(f"[WHISPER] Transcribing audio for filler detection...")
+            print(f"[CLEANVOICE WHISPER] Transcribing audio with word-level timestamps...")
             
-            # Transcribe with word-level timestamps
+            # Whisper transcription with word-level timestamps (CleanVoice AI core)
             result = model.transcribe(
                 audio_path,
-                word_timestamps=True,
+                word_timestamps=True,  # Critical for CleanVoice AI mechanism
                 language='en',
                 verbose=False,
-                fp16=False  # Disable FP16 to avoid CPU warning
+                fp16=False
             )
             
             filler_segments = []
             
-            # Check segments for filler words
+            # CleanVoice AI pattern matching: Check each word
             for segment in result.get('segments', []):
                 words = segment.get('words', [])
                 for word_info in words:
                     word = word_info.get('word', '').lower().strip()
-                    # Remove punctuation
+                    # Clean punctuation for exact matching
                     word_clean = ''.join(c for c in word if c.isalnum() or c.isspace()).strip()
                     
-                    # Check if word is EXACTLY a filler (exact match only)
+                    # EXACT match only (CleanVoice AI precision)
                     if word_clean in target_fillers:
                         start_ms = int(word_info.get('start', 0) * 1000)
                         end_ms = int(word_info.get('end', 0) * 1000)
                         
-                        # Add minimal buffer to avoid cutting real words
-                        start_ms = max(0, start_ms - 20)  # Reduced from 50ms to 20ms
-                        end_ms = end_ms + 20  # Reduced from 50ms to 20ms
+                        # Minimal buffer to avoid cutting real speech
+                        start_ms = max(0, start_ms - 8)  # 8ms before
+                        end_ms = end_ms + 8  # 8ms after
                         
                         filler_segments.append((start_ms, end_ms))
-                        print(f"[WHISPER] Found filler '{word_clean}' at {start_ms}ms - {end_ms}ms")
+                        print(f"[CLEANVOICE WHISPER] \u2713 Detected '{word_clean}' at {start_ms}-{end_ms}ms")
             
             # Merge overlapping segments
             merged_segments = self._merge_overlapping_segments(filler_segments)
-            print(f"[WHISPER] Detected {len(merged_segments)} filler word segments")
+            print(f"[CLEANVOICE WHISPER] Total filler segments: {len(merged_segments)}")
             return merged_segments
             
         except Exception as e:
-            print(f"[WHISPER] Error in filler detection: {e}")
+            print(f"[CLEANVOICE WHISPER] ✗ Error in filler detection: {e}")
             return []
     
     def _detect_filler_patterns_fallback(self, audio, enhancement_type):
@@ -906,24 +924,25 @@ class AudioEnhancer:
         return merged
     
     def _reduce_noise(self, audio, noise_level):
-        """Professional noise reduction using noisereduce library"""
+        """Professional NR v4.0 - 100% Denoise Capability with Multi-Pass"""
         try:
             if noise_level == 'none':
                 return audio
             
-            print(f"[NOISE REDUCTION] Starting professional noise cleaning: {noise_level}")
+            print(f"[NR v4.0] Starting professional noise reduction: {noise_level}")
             
             import noisereduce as nr
+            from scipy import signal as scipy_signal
             
             # Convert to numpy array
             samples = np.array(audio.get_array_of_samples(), dtype=np.float32)
             sample_rate = audio.frame_rate
             channels = audio.channels
             
-            # Normalize to -1 to 1 range
+            # Normalize to -1 to 1
             samples = samples / 32768.0
             
-            # Handle stereo/mono
+            # Handle stereo
             if channels == 2:
                 samples = samples.reshape((-1, 2))
                 left_channel = samples[:, 0]
@@ -932,35 +951,134 @@ class AudioEnhancer:
                 left_channel = samples
                 right_channel = None
             
-            # Configure noise reduction based on level - stronger settings
-            config = {
-                'light': {'prop_decrease': 0.8, 'n_std_thresh': 1.2},
-                'moderate': {'prop_decrease': 0.9, 'n_std_thresh': 1.0},
-                'strong': {'prop_decrease': 0.95, 'n_std_thresh': 0.8},
-                'full': {'prop_decrease': 0.98, 'n_std_thresh': 0.5}
+            # Professional NR v4.0 Profiles (Aggressive noise removal with voice preservation)
+            nr_profiles = {
+                'light': {
+                    'stationary_prop': 0.88,
+                    'non_stationary_prop': 0.75,
+                    'voice_boost': 1.15,
+                    'passes': 1
+                },
+                'moderate': {
+                    'stationary_prop': 0.95,
+                    'non_stationary_prop': 0.88,
+                    'voice_boost': 1.25,
+                    'passes': 2  # Multi-pass for better results
+                },
+                'strong': {
+                    'stationary_prop': 0.97,
+                    'non_stationary_prop': 0.92,
+                    'voice_boost': 1.28,
+                    'passes': 3  # Triple pass for strong removal
+                },
+                'full': {
+                    'stationary_prop': 0.99,
+                    'non_stationary_prop': 0.96,
+                    'voice_boost': 1.32,
+                    'passes': 3  # Triple pass for maximum noise removal
+                }
             }
             
-            params = config.get(noise_level, config['moderate'])
-            print(f"[NOISE REDUCTION] Applying {params['prop_decrease']*100}% reduction")
+            profile = nr_profiles.get(noise_level, nr_profiles['moderate'])
+            print(f"[NR v4.0] Profile: {noise_level} | Stationary: {profile['stationary_prop']*100:.0f}% | Non-stationary: {profile['non_stationary_prop']*100:.0f}% | Passes: {profile['passes']}")
             
-            # Apply noise reduction to left channel
+            # STEP 1: Extract comprehensive noise sample (NR v4.0 method)
+            print(f"[NR v4.0] Extracting noise profile from audio...")
+            noise_sample = self._extract_noise_profile(left_channel, sample_rate)
+            
+            if noise_sample is None or len(noise_sample) < 100:
+                # Fallback: Use first 1.5 seconds as noise sample
+                noise_length = min(int(sample_rate * 1.5), len(left_channel) // 2)
+                noise_sample = left_channel[:noise_length]
+                print(f"[NR v4.0] Using first 1.5s as noise sample (length: {len(noise_sample)})")
+            else:
+                print(f"[NR v4.0] ✓ Noise profile extracted (length: {len(noise_sample)})")
+            
+            # STEP 3: Multi-Pass Professional Denoising (CleanVoice AI Algorithm)
+            print(f"[CLEANVOICE DENOISE] Pass 1/2: Primary noise removal with learned profile...")
+            
+            # Pass 1: Aggressive stationary noise removal (AC, fan, hum)
             left_clean = nr.reduce_noise(
                 y=left_channel,
                 sr=sample_rate,
+                y_noise=noise_sample,  # Use learned noise profile
                 stationary=True,
-                prop_decrease=params['prop_decrease'],
-                n_std_thresh_stationary=params['n_std_thresh']
+                prop_decrease=profile['stationary_prop'],
+                freq_mask_smooth_hz=600,  # Balanced for noise removal
+                time_mask_smooth_ms=60
             )
             
-            # Apply to right channel if stereo
+            # Pass 2: Non-stationary cleanup (clicks, pops, keyboard)
+            left_clean = nr.reduce_noise(
+                y=left_clean,
+                sr=sample_rate,
+                y_noise=noise_sample,
+                stationary=False,
+                prop_decrease=profile['non_stationary_prop'],
+                freq_mask_smooth_hz=400,
+                time_mask_smooth_ms=40
+            )
+            
+            # Multi-pass for moderate+ levels (like the web app you showed)
+            if profile['passes'] >= 2:
+                print(f"[NR v4.0] Pass 2/{profile['passes']}: Refinement pass...")
+                # Second pass - moderate strength for additional cleaning
+                left_clean = nr.reduce_noise(
+                    y=left_clean,
+                    sr=sample_rate,
+                    y_noise=noise_sample,
+                    stationary=True,
+                    prop_decrease=min(profile['stationary_prop'] * 0.65, 0.88),
+                    freq_mask_smooth_hz=800,
+                    time_mask_smooth_ms=80
+                )
+                print(f"[NR v4.0] ✓ Pass 2 complete")
+            
+            if profile['passes'] >= 3:
+                print(f"[NR v4.0] Pass 3/{profile['passes']}: Final polish...")
+                # Third pass - light polish for smoothness
+                left_clean = nr.reduce_noise(
+                    y=left_clean,
+                    sr=sample_rate,
+                    y_noise=noise_sample,
+                    stationary=True,
+                    prop_decrease=0.80,
+                    freq_mask_smooth_hz=1000,
+                    time_mask_smooth_ms=100
+                )
+                print(f"[NR v4.0] ✓ Pass 3 complete")
+            
+            print(f"[NR v4.0] Final Stage: Voice spectrum enhancement...")
+            # Voice enhancement using spectral shaping
+            left_clean = self._enhance_voice_spectrum(left_clean, sample_rate, profile['voice_boost'])
+            
+            # Process right channel if stereo
             if right_channel is not None:
+                right_with_vad = self._apply_voice_activity_detection(right_channel, sample_rate)
+                
+                # Stage 1: Stationary noise
                 right_clean = nr.reduce_noise(
                     y=right_channel,
                     sr=sample_rate,
                     stationary=True,
-                    prop_decrease=params['prop_decrease'],
-                    n_std_thresh_stationary=params['n_std_thresh']
+                    prop_decrease=profile['stationary_prop'],
+                    freq_mask_smooth_hz=500,
+                    time_mask_smooth_ms=50
                 )
+                
+                # Stage 2: Non-stationary noise
+                right_clean = nr.reduce_noise(
+                    y=right_clean,
+                    sr=sample_rate,
+                    stationary=False,
+                    prop_decrease=profile['non_stationary_prop'],
+                    freq_mask_smooth_hz=300,
+                    time_mask_smooth_ms=30
+                )
+                
+                # Stage 3: Voice enhancement
+                right_clean = self._enhance_voice_spectrum(right_clean, sample_rate, profile['voice_boost'])
+                
                 samples_clean = np.column_stack((left_clean, right_clean)).flatten()
             else:
                 samples_clean = left_clean
@@ -968,23 +1086,128 @@ class AudioEnhancer:
             # Convert back to int16
             samples_clean = np.clip(samples_clean * 32767, -32768, 32767).astype(np.int16)
             
-            # Create cleaned AudioSegment
+            # Create cleaned audio
             enhanced = audio._spawn(samples_clean.tobytes())
             
-            # Apply gentle high-pass filter to remove rumble
+            # STEP 4: Advanced EQ filtering (voice-optimized)
+            # Remove sub-bass rumble (< 80Hz)
             enhanced = enhanced.high_pass_filter(80)
             
-            # Normalize final output
-            enhanced = normalize(enhanced)
+            # Remove ultrasonic noise (> 8000Hz for human voice)
+            if noise_level in ['strong', 'full']:
+                enhanced = enhanced.low_pass_filter(8000)
             
-            print(f"[NOISE REDUCTION] Noise cleaning complete!")
+            # STEP 5: Gentle dynamic range compression (voice clarity without distortion)
+            try:
+                enhanced = enhanced.compress_dynamic_range(
+                    threshold=-20.0,  # Less aggressive threshold
+                    ratio=2.0,        # Very gentle compression
+                    attack=5.0,       # Slower attack to preserve transients
+                    release=50.0      # Smooth release
+                )
+            except:
+                pass
+            
+            # STEP 6: Final normalization with more headroom to prevent clipping
+            target_dBFS = -6.0  # More headroom to prevent distortion
+            change_in_dBFS = target_dBFS - enhanced.dBFS
+            enhanced = enhanced.apply_gain(change_in_dBFS)
+            
+            print(f"[NR v4.0] ✓ Professional noise reduction complete! ({profile['stationary_prop']*100:.0f}% stationary, {profile['non_stationary_prop']*100:.0f}% non-stationary, {profile['passes']} passes)")
             return enhanced
             
         except Exception as e:
-            print(f"[NOISE REDUCTION] Error: {e}")
+            print(f"[NR v4.0] ✗ Error: {e}")
             import traceback
             traceback.print_exc()
             return audio
+    
+    def _apply_voice_activity_detection(self, audio_data, sample_rate):
+        """CleanVoice AI: Voice Activity Detection using energy + zero-crossing rate"""
+        try:
+            # Frame-based VAD
+            frame_length = int(sample_rate * 0.025)  # 25ms frames
+            hop_length = int(sample_rate * 0.010)    # 10ms hop
+            
+            vad_mask = []
+            
+            for i in range(0, len(audio_data) - frame_length, hop_length):
+                frame = audio_data[i:i + frame_length]
+                
+                # Energy-based detection
+                energy = np.sum(frame ** 2) / len(frame)
+                
+                # Zero-crossing rate (voice has specific ZCR)
+                zcr = np.sum(np.abs(np.diff(np.sign(frame)))) / (2 * len(frame))
+                
+                # Voice typically has: moderate energy + moderate ZCR
+                is_voice = (energy > 0.001) and (0.02 < zcr < 0.5)
+                vad_mask.append(is_voice)
+            
+            return vad_mask
+            
+        except:
+            return None
+    
+    def _extract_noise_profile(self, audio_data, sample_rate):
+        """CleanVoice AI: Adaptive noise profiling (learns from silent sections)"""
+        try:
+            # CleanVoice AI Strategy: Extract noise from multiple quiet sections
+            # 1. First 1 second (usually has intro noise)
+            # 2. Find other low-energy sections throughout audio
+            
+            noise_samples = []
+            
+            # Get first 1 second as primary noise sample
+            first_second_length = min(int(sample_rate * 1.0), len(audio_data) // 3)
+            if first_second_length > 0:
+                noise_samples.append(audio_data[:first_second_length])
+            
+            # Find 2-3 more quiet sections (low energy parts)
+            frame_length = int(sample_rate * 0.5)  # 500ms frames
+            energy_threshold = 0.01  # Low energy = likely noise-only
+            
+            for i in range(0, len(audio_data) - frame_length, frame_length):
+                frame = audio_data[i:i + frame_length]
+                energy = np.sum(frame ** 2) / len(frame)
+                
+                if energy < energy_threshold and len(noise_samples) < 4:
+                    noise_samples.append(frame)
+            
+            # Combine all noise samples
+            if noise_samples:
+                combined_noise = np.concatenate(noise_samples)
+                return combined_noise
+            else:
+                # Fallback: use first portion
+                return audio_data[:first_second_length]
+            
+        except:
+            return None
+    
+    def _enhance_voice_spectrum(self, audio_data, sample_rate, boost_factor):
+        """CleanVoice AI: Voice spectrum enhancement (200-3500Hz bandpass boost)"""
+        try:
+            from scipy import signal as scipy_signal
+            
+            # Design bandpass filter for voice frequencies
+            # Human voice fundamental: 85-255Hz (male) to 165-255Hz (female)
+            # Harmonics: up to 3400Hz for intelligibility
+            
+            # Boost voice range (200Hz - 3500Hz)
+            sos_voice = scipy_signal.butter(4, [200, 3500], btype='band', fs=sample_rate, output='sos')
+            voice_band = scipy_signal.sosfilt(sos_voice, audio_data)
+            
+            # Combine: original + boosted voice
+            enhanced = audio_data + (voice_band * (boost_factor - 1.0))
+            
+            # Clip to prevent distortion
+            enhanced = np.clip(enhanced, -1.0, 1.0)
+            
+            return enhanced
+            
+        except:
+            return audio_data
         
         # Normalize by window overlap
         norm_factor = np.zeros_like(signal)

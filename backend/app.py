@@ -32,34 +32,26 @@ CORS(app, supports_credentials=True)
 app.config['SECRET_KEY'] = os.getenv('JWT_SECRET_KEY')
 app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_CONTENT_LENGTH', 500 * 1024 * 1024))
 
-# MongoDB connection with fallback to Atlas
+# MongoDB connection for production
 def connect_mongodb():
-    """Try local MongoDB first, fallback to MongoDB Atlas if local fails"""
-    local_uri = os.getenv('MONGODB_URI', 'mongodb://localhost:27017')
-    atlas_uri = os.getenv('MONGODB_ATLAS_URI')
+    """Connect to MongoDB (Atlas for production, local for development)"""
+    mongodb_uri = os.getenv('MONGODB_URI', 'mongodb://localhost:27017')
     
-    # Try local MongoDB first
     try:
-        client = MongoClient(local_uri, serverSelectionTimeoutMS=5000)
+        client = MongoClient(mongodb_uri, serverSelectionTimeoutMS=10000)
         client.server_info()
-        logger.info("✅ Connected to local MongoDB")
+        
+        # Check if it's Atlas or local
+        if 'mongodb+srv' in mongodb_uri or 'mongodb.net' in mongodb_uri:
+            logger.info("✅ Connected to MongoDB Atlas (production)")
+        else:
+            logger.info("✅ Connected to local MongoDB (development)")
+        
         return client
     except Exception as e:
-        logger.warning(f"⚠️ Local MongoDB connection failed: {str(e)}")
-    
-    # Fallback to MongoDB Atlas
-    if atlas_uri:
-        try:
-            client = MongoClient(atlas_uri, serverSelectionTimeoutMS=10000)
-            client.server_info()
-            logger.info("✅ Connected to MongoDB Atlas (cloud)")
-            return client
-        except Exception as e:
-            logger.error(f"❌ MongoDB Atlas connection failed: {str(e)}")
-    else:
-        logger.error("❌ No MONGODB_ATLAS_URI configured for fallback")
-    
-    raise Exception("Could not connect to any MongoDB instance")
+        logger.error(f"❌ MongoDB connection failed: {str(e)}")
+        logger.error(f"❌ URI: {mongodb_uri[:30]}...")
+        raise Exception(f"Could not connect to MongoDB: {str(e)}")
 
 try:
     client = connect_mongodb()

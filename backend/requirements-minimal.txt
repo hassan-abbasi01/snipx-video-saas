@@ -15,7 +15,7 @@ moviepy==1.0.3
 opencv-python-headless==4.9.0.80
 pydub==0.25.1
 numpy==1.26.4
-scipy>=1.11.0
+scipy==1.13.0
 librosa>=0.10.0
 
 # ML (will work on Python 3.13 - newer versions)

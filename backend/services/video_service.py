@@ -8,9 +8,10 @@ import magic
 import cv2
 import numpy as np
 from moviepy.editor import VideoFileClip
-from pydub import AudioSegment
-from pydub.effects import normalize, compress_dynamic_range
-from pydub.silence import split_on_silence, detect_nonsilent
+# TEMPORARILY DISABLED - pydub requires audioop (removed in Python 3.13)
+# from pydub import AudioSegment
+# from pydub.effects import normalize, compress_dynamic_range
+# from pydub.silence import split_on_silence, detect_nonsilent
 # import tensorflow as tf  # Removed for minimal deployment
 # from transformers import pipeline, BlipProcessor, BlipForConditionalGeneration  # Removed for minimal deployment
 # import torch  # Removed for minimal deployment
@@ -592,10 +593,15 @@ class AudioEnhancer:
         return self._whisper_model
     
     def enhance_audio(self, audio_path, options):
-        """Main audio enhancement function"""
-        try:
-            # Load audio
-            audio = AudioSegment.from_file(audio_path)
+        """Main audio enhancement function - TEMPORARILY DISABLED for Python 3.13"""
+        print("[AUDIO ENHANCE] Audio enhancement temporarily disabled - pydub not compatible with Python 3.13")
+        # Return original audio path without enhancement
+        return audio_path
+        
+        # COMMENTED OUT - Requires pydub which needs audioop (removed in Python 3.13)
+        # try:
+        #     # Load audio
+        #     audio = AudioSegment.from_file(audio_path)
             print(f"[AUDIO ENHANCE] Loaded audio: {len(audio)}ms, {audio.frame_rate}Hz")
             
             # Get enhancement options

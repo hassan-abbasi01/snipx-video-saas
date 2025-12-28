@@ -11,12 +11,12 @@ from moviepy.editor import VideoFileClip
 from pydub import AudioSegment
 from pydub.effects import normalize, compress_dynamic_range
 from pydub.silence import split_on_silence, detect_nonsilent
-import tensorflow as tf
-from transformers import pipeline, BlipProcessor, BlipForConditionalGeneration
-import torch
+# import tensorflow as tf  # Removed for minimal deployment
+# from transformers import pipeline, BlipProcessor, BlipForConditionalGeneration  # Removed for minimal deployment
+# import torch  # Removed for minimal deployment
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
-import librosa
-import scipy.signal
+# import librosa  # Removed for minimal deployment (requires scipy)
+# import scipy.signal  # Removed for minimal deployment
 import re
 
 # Set FFmpeg path for Windows
